@@ -6,10 +6,10 @@ sklearn
 yellowbrick
 ipywidgets==7.6.5
 IPython==7.16.1
-re==2.2.1
-scipy==1.6.2
-holidays==0.11.3.1
-panel==0.12.6
+re
+scipy
+holidays
+panel
 
 
 
