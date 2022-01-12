@@ -6,6 +6,8 @@ sklearn
 yellowbrick
 ipywidgets==7.6.5
 IPython==7.16.1
+xlrd==1.2.0
+openpyxl
 scipy
 holidays
 panel
