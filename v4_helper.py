@@ -701,7 +701,7 @@ def mult_predict(origdf, model, col_to_slider):
     
     y = model.predict(v)
 
-    print(f"The prediction in dollars is {np.exp(y)}")
+    print(f"The prediction is {np.exp(y)}")
 
     return np.exp(y)
 
@@ -735,7 +735,7 @@ def add_predict(origdf, model, col_to_slider):
 
     y = model.predict(v)
 
-    print(f"The prediction in dollars is {y}")
+    print(f"The prediction is {y}")
 
     return y
 
@@ -1044,7 +1044,7 @@ def optimize_budget(origdf, data_matrix, model, col_to_slider, budget=20000):
     constraints=constraint,
     bounds=bounds)
     
-    print(f"Budget = ${budget}, Expected Revenue = ${-1 * res.fun}")
+    print(f"Budget = ${budget}, Expected Revenue/Orders = {-1 * res.fun}")
     optimized_budget = dict(zip(var_names, res.x))
     return optimized_budget
 
