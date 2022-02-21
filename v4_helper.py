@@ -394,7 +394,7 @@ def apply_adstock(df, column_name):
     
     for alpha in np.arange(0.1, 1, 0.1):
         for L in np.arange(0, 30, 2):
-            for theta in np.arange(0, L+1):
+            for theta in [0]:
                 col = f"{column_name}_alpha={alpha}L={L}theta={theta}"
                 df_transformations[col] = carryover(x=v, alpha=alpha, L=L, theta=theta)
     
