@@ -495,6 +495,8 @@ def apply_transformations(data_dict, country, response_var='Revenue'):
     
     print("number of nulls post transformations =", data_matrix.isna().any().sum())
     
+    # fixes bug involving keyerror when column name has space in it
+    data_matrix.columns = [col.replace(" ", "_") for col in data_matrix.columns]
     
     
     return data_matrix
@@ -748,6 +750,7 @@ def month_predict(forecast_df, origdf, model, model_type="additive"):
     
     
     forecast_df.columns = [shorten_f_name(col) + "_MediaCost" for col in forecast_df.columns] # fix the columns
+    # print(forecast_df.columns)
     predictions = [] # list of predictions
 
     
@@ -825,6 +828,7 @@ def transform_row(vector, model, origdf):
     media_vars = [col for col in model.feature_names_in_ if "Media" in col and 'Cost' in col]
     
     for feature in media_vars:
+        
         orig_col, alpha, L, theta = re.findall("([\w|\s]+)_alpha=(\d.\d+)L=(\d+)theta=(\d+)", feature)[0]
         origdf[feature] = carryover(x=origdf[orig_col].values, alpha=float(alpha), L=int(L), theta=int(theta))
         origdf.drop(orig_col, axis=1, inplace=True)
