@@ -908,6 +908,29 @@ def pred_vs_true(model, X, Y, model_type="additive"):
     plt.plot(X.index, y_pred, color='green', label='predicted revenue')
     plt.legend()
     plt.title(f"true vs predicted revenue (mape={mape}, model_type={model_type})");
+    
+def pred_vs_true_v2(model, X, Y, model_type="additive"):
+    
+    split = int(0.8 * len(X_train))
+    
+    
+    xtrain, xval = X_train.iloc[:split, :], X_train.iloc[split:, :]
+    ytrain, yval = Y_train.iloc[:split], Y_train.iloc[split:]
+
+    model.fit(xtrain, ytrain)
+    y_true = yval
+    y_pred = model.predict(xval)
+    
+    if model_type == "multiplicative":
+        y_true = np.exp(y_true)
+        y_pred = np.exp(y_pred)
+    
+    mape = mean_absolute_percentage_error(y_true, y_pred) 
+    plt.plot(X.index, y_true, color='blue', label='true revenue')
+    plt.plot(X.index, y_pred, color='green', label='predicted revenue')
+    plt.legend()
+    plt.title(f"true vs predicted revenue on validation sample (mape={mape}, model_type={model_type})");
+    
 
 def set_bounds(model):
     items =  []
@@ -1043,6 +1066,12 @@ def graph_month(llb, x_opt):
 def export_attribute_table(model):
     coef = model.coef_
     
+# for each media feature
+    # zero it out
+    # predict with model
+    # find difference
+    # use difference to calculate ROAS
+
     
     
     
