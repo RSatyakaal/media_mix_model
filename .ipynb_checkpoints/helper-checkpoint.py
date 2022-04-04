@@ -87,30 +87,6 @@ def input_file(file_type, use_excel=False):
     
     return upload
     
-# def parse_file(data, file_type, use_excel=False):
-#     """
-#         cell-2: parse the .csv file inputted into upload button
-#     """
-    
-#     assert len(data.value) > 0, "PLEASE go back and run the above CELL"
-#     print(f"Thanks for uploading the {file_type}. I will display the dataframe in 2 seconds")
-#     uf = data.value[list(data.value.keys())[0]]['content']
-    
-#     if not use_excel:
-#         df = pd.read_csv(io.BytesIO(uf))
-#     else:
-#         df = pd.read_excel(io.BytesIO(uf))
-        
-#     display(df)
-#     print(f"Type the letter y if the {file_type} file is good to go, OR the letter n if you'd like to reupload")
-#     time.sleep(1)
-#     x = input("proceed [y/n]")
-#     if x == 'y' or x == 'Y':
-#         print("SUCCESS -- PROCEED")
-#     elif x == 'n' or x == 'N':
-#         print("RERUN CELL-1")
-
-#     return df
 
 def parse_file(data, file_type, use_excel=False):
     """
@@ -123,10 +99,7 @@ def parse_file(data, file_type, use_excel=False):
         df = pd.read_csv(io.BytesIO(uf))
     else:
         df = pd.read_excel(io.BytesIO(uf))
-    
-    
-    
-    
+        
     display(df)
     t = input("Is the header correct [y/n]")
     
@@ -137,16 +110,17 @@ def parse_file(data, file_type, use_excel=False):
         df.columns = new_header
     
     
-    display(df)    
-    print(f"Type the letter y if the {file_type} file is good to go, OR the letter n if you'd like to reupload")
-    time.sleep(1)
-    x = input("proceed [y/n]")
-    if x == 'y' or x == 'Y':
+        display(df)    
+        print(f"Type the letter y if the {file_type} file is good to go, OR the letter n if you'd like to reupload")
+    
+        x = input("proceed [y/n]")
+        if x == 'y' or x == 'Y':
+            print("SUCCESS -- PROCEED")
+        elif x == 'n' or x == 'N':
+            print("RERUN CELL-1")
+    else:
         print("SUCCESS -- PROCEED")
-    elif x == 'n' or x == 'N':
-        print("RERUN CELL-1")
-    #print("")
-    #display(df)
+
     return df
 
 def clean_sales(df, file_type, granularity=True):
@@ -155,7 +129,6 @@ def clean_sales(df, file_type, granularity=True):
     """
     
     print(f"COLUMNS of {file_type}: {df.columns.values}")
-    time.sleep(1)
     
     
     
@@ -917,7 +890,7 @@ def mult_sat_curve(model, i=3):
     plt.xlabel("Spending($)")
     plt.ylabel("Predicted Revenue ($)");
     
-def pred_vs_true(model, X, Y):
+def pred_vs_true(model, X, Y, model_type="additive"):
     """
         inputs:
             model: fitted model
@@ -926,12 +899,15 @@ def pred_vs_true(model, X, Y):
     y_true = Y.values
     y_pred = model.predict(X)
     
-    mape = mean_absolute_percentage_error(y_true, y_pred)
-    
+    if model_type == "multiplicative":
+        mape = mean_absolute_percentage_error(np.exp(y_true), np.exp(y_pred))
+    else:
+        mape = mean_absolute_percentage_error(y_true, y_pred)
+        
     plt.plot(X.index, y_true, color='blue', label='true revenue')
     plt.plot(X.index, y_pred, color='green', label='predicted revenue')
     plt.legend()
-    plt.title(f"true vs predicted revenue (mape={mape})");
+    plt.title(f"true vs predicted revenue (mape={mape}, model_type={model_type})");
 
 def set_bounds(model):
     items =  []
