@@ -900,10 +900,10 @@ def pred_vs_true(model, X, Y, model_type="additive"):
     y_pred = model.predict(X)
     
     if model_type == "multiplicative":
-        mape = mean_absolute_percentage_error(np.exp(y_true), np.exp(y_pred))
-    else:
-        mape = mean_absolute_percentage_error(y_true, y_pred)
-        
+        y_true = np.exp(y_true)
+        y_pred = np.exp(y_pred)
+    
+    mape = mean_absolute_percentage_error(y_true, y_pred) 
     plt.plot(X.index, y_true, color='blue', label='true revenue')
     plt.plot(X.index, y_pred, color='green', label='predicted revenue')
     plt.legend()
@@ -1038,6 +1038,11 @@ def graph_month(llb, x_opt):
     plt.title("Optimized Budget for Month")
     plt.xlabel("Days")
     plt.ylabel("Spending ($)");
+    
+
+def export_attribute_table(model):
+    coef = model.coef_
+    
     
     
     

@@ -900,14 +900,30 @@ def pred_vs_true(model, X, Y, model_type="additive"):
     y_pred = model.predict(X)
     
     if model_type == "multiplicative":
-        mape = mean_absolute_percentage_error(np.exp(y_true), np.exp(y_pred))
-    else:
-        mape = mean_absolute_percentage_error(y_true, y_pred)
-        
+        y_true = np.exp(y_true)
+        y_pred = np.exp(y_pred)
+    
+    mape = mean_absolute_percentage_error(y_true, y_pred) 
     plt.plot(X.index, y_true, color='blue', label='true revenue')
     plt.plot(X.index, y_pred, color='green', label='predicted revenue')
     plt.legend()
     plt.title(f"true vs predicted revenue (mape={mape}, model_type={model_type})");
+    
+def pred_vs_true_v2(model, X, Y, model_type="additive"):
+    
+    split = int(0.8 * len(X_train))
+    
+    
+    xtrain, xval = X_train.iloc[:split, :], X_train.iloc[split:, :]
+    ytrain, yval = Y_train.iloc[:split], Y_train.iloc[split:]
+
+    model.fit(xtrain, ytrain)
+    train_error = metricFunc(ytrain, model.predict(xtrain))
+    val_error = metricFunc(yval, model.predict(xval))
+
+
+    print(f"model={model} train_r2={train_error} validation_r2={val_error}")
+    
 
 def set_bounds(model):
     items =  []
