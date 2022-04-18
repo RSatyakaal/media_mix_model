@@ -136,9 +136,9 @@ def clean_sales(df, file_type, granularity=True):
         print("That column is not a valid column. We'll try again")
     
     def extract_country():
-        print("If SALES DATA has more than one country that you'd like to segment and analyze separately, type the name of the column")
-        print("If not, type NONE in that exact format")
-        country = input("[column-name/NONE]")
+#         print("If SALES DATA has more than one country that you'd like to segment and analyze separately, type the name of the column")
+#         print("If not, type NONE in that exact format")
+        country = input("COUNTRY | [column-name/NONE]")
 
         if "NONE" in country:
             country = []
@@ -155,8 +155,8 @@ def clean_sales(df, file_type, granularity=True):
     assert df[country].isna().any().sum() == 0, f"The country column in this dataset contains null values. Please modify this and rerun the notebook."
     
     def extract_idx(n):
-        print(f"Which column corresponds to the {n}")
-        idx = input("[column-name]")
+#         print(f"Which column corresponds to the {n}")
+        idx = input(f"{n.upper()} | [column-name]")
         
         if idx not in df.columns.values:
             error_message()
@@ -174,9 +174,9 @@ def clean_sales(df, file_type, granularity=True):
 
     
     def extract_target():
-        print(f"Which column corresponds to the target/response/dependent variable? In most cases, this will be REVENUE or something similar")
+#         print(f"Which column corresponds to the target/response/dependent variable? In most cases, this will be REVENUE or something similar")
         
-        y = input("[column-name]")
+        y = input(f"RESPONSE VARIABLE | [column-name]")
         
         if y not in df.columns.values:
             error_message()
@@ -226,9 +226,9 @@ def clean_and_merge(ad_df, sales_df):
     print(ad_df.columns.values)
     
     # LIMITATION: country column in sales data must be same as country column in ad data
-    x = input("What column corresponds to the country column in the ad data?")
-    y = input("What column corresponds to the media cost column in the ad data?")
-    z = input("What column corresponds to the impressions column in the ad data?")
+    x = input("COUNTRY?")
+    y = input("MEDIA COST?")
+    z = input("IMPRESSIONS?")
     keep = ad_df[x].notna()
     ad_df = ad_df[keep]
     countries = ad_df[x].unique().tolist()
@@ -236,8 +236,8 @@ def clean_and_merge(ad_df, sales_df):
     
     d = {}
     for country in countries:
-        print(country)
-        print(f"PROCESSING {country}")
+#         print(country)
+#         print(f"PROCESSING {country}")
         country_ad = ad_df[ad_df[x] == country]
         c_media_cost = create_pivot_table(country_ad, y, indexes=['Publisher']).add_suffix("_MediaCost")
         c_impressions = create_pivot_table(country_ad, z, ['Publisher']).add_suffix('_Impressions')
@@ -283,7 +283,7 @@ def clean_and_merge(ad_df, sales_df):
         final_c_df.fillna(0, inplace=True)
         d[country] = final_c_df
             
-        print(f"MERGE SUCCESS for {country}")
+#         print(f"MERGE SUCCESS for {country}")
     
     return d
 
