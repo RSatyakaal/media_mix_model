@@ -159,3 +159,60 @@ class BayesianMixModel:
         g = max(max(x), max(y))
         scatterplot.add("true = pred", [(0,0), (g, g)], stroke=True)
         show(scatterplot)
+        
+    def attribution(self):
+        """
+            inputs:
+                target - (str) response variable
+            output:
+                attribution graph
+        """
+        def compute_mean(trace, channel):
+            return (trace
+                    .posterior[f'contribution_{channel}']
+                    .values
+                    .reshape(4000, 200)
+                    .mean(0)
+                   )
+        target = self.target
+        X = self.X
+        trace = self.trace
+        data = self.X
+        
+        channels = X.columns.values
+        unadj_contributions = pd.DataFrame(
+            {'Base': trace.posterior['base'].values.mean()},
+            index=X.index
+        )
+        for channel in channels:
+            unadj_contributions[channel] = compute_mean(trace, channel)
+        adj_contributions = (unadj_contributions
+                             .div(unadj_contributions.sum(axis=1), axis=0)
+                             .mul(y, axis=0)
+                            )
+        attribution_table = pd.DataFrame({'Revenue Contributions': adj_contributions.sum(axis=0)[1:], 
+                                          'Media Spending': data[channels].sum(axis=0)})
+        attribution_table['Attribution'] = attribution_table['Revenue Contributions'] / attribution_table['Media Spending']
+        attribution_table.to_excel('Attribution Table.xlsx')
+
+        ax = (adj_contributions
+          .plot.area(
+              figsize=(16, 10),
+              linewidth=1,
+              title='Predicted Sales and Breakdown',
+              ylabel='Sales',
+              xlabel='Date'
+          )
+         )
+
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(
+            handles[::-1], labels[::-1],
+            title='Channels', loc="center left",
+            bbox_to_anchor=(1.01, 0.5)
+        )
+
+        '''line_chart = pygal.StackedLine(fill=True, explicit_size=True, height=600, width=1000, legend_at_bottom=True, title="Attribution", x_title="Day", y_title=f"{target}")
+        for col in adj_contributions.columns:
+            line_chart.add(col, adj_contributions[col].values)
+        show(line_chart)'''

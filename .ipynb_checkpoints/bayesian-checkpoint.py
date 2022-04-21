@@ -68,14 +68,15 @@ class BayesianMixModel:
         with pm.Model() as mmm:
             channel_contributions = []
             
-            data = pm.Data("data", self.X)
+#             data = pm.Data("data", self.X)
             
             for i, channel in enumerate(self.X.columns.values):
                 coef = pm.Exponential(f'coef_{channel}', lam=0.0001)
                 sat = pm.Exponential(f'sat_{channel}', lam=1)
                 car = pm.Beta(f'car_{channel}', alpha=2, beta=2)
 
-                channel_data = data.get_value()[:, i]
+#                 channel_data = data.get_value()[:, i]
+                channel_data = pm.Data(f"{channel}", self.X.iloc[:, i])
                 channel_contribution = pm.Deterministic(
                     f'contribution_{channel}',
                     coef * saturate(
@@ -108,9 +109,15 @@ class BayesianMixModel:
         """
             X: DataFrame
         """
-        pm.set_data({"data" : X}, model=self.mmm)
-        ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
-        p_test_pred = ppc_test["sales"].mean(axis=0)
+        print("I peed on deez nuts")
+
+        
+        
+        with self.mmm:
+            pm.set_data({channel: self.X.iloc[:, i] for i, channel in enumerate(self.X.columns.values)}, model=self.mmm)
+            print("I pissed in yo wallet, and then took a dump on yo grave")
+            ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
+            p_test_pred = ppc_test["sales"].mean(axis=0)
         
         return p_test_pred
     
@@ -152,3 +159,60 @@ class BayesianMixModel:
         g = max(max(x), max(y))
         scatterplot.add("true = pred", [(0,0), (g, g)], stroke=True)
         show(scatterplot)
+        
+    def attribution(self):
+        """
+            inputs:
+                target - (str) response variable
+            output:
+                attribution graph
+        """
+        def compute_mean(trace, channel):
+            return (trace
+                    .posterior[f'contribution_{channel}']
+                    .values
+                    .reshape(4000, 200)
+                    .mean(0)
+                   )
+        target = self.target
+        X = self.X
+        trace = self.trace
+        data = self.X
+        
+        channels = X.columns.values
+        unadj_contributions = pd.DataFrame(
+            {'Base': trace.posterior['base'].values.mean()},
+            index=X.index
+        )
+        for channel in channels:
+            unadj_contributions[channel] = compute_mean(trace, channel)
+        adj_contributions = (unadj_contributions
+                             .div(unadj_contributions.sum(axis=1), axis=0)
+                             .mul(y, axis=0)
+                            )
+        attribution_table = pd.DataFrame({'Revenue Contributions': adj_contributions.sum(axis=0)[1:], 
+                                          'Media Spending': data[channels].sum(axis=0)})
+        attribution_table['Attribution'] = attribution_table['Revenue Contributions'] / attribution_table['Media Spending']
+        attribution_table.to_excel('Attribution Table.xlsx')
+
+        ax = (adj_contributions
+          .plot.area(
+              figsize=(16, 10),
+              linewidth=1,
+              title='Predicted Sales and Breakdown',
+              ylabel='Sales',
+              xlabel='Date'
+          )
+         )
+
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(
+            handles[::-1], labels[::-1],
+            title='Channels', loc="center left",
+            bbox_to_anchor=(1.01, 0.5)
+        )
+
+        '''line_chart = pygal.StackedLine(fill=True, explicit_size=True, height=600, width=1000, legend_at_bottom=True, title="Attribution", x_title="Day", y_title=f"{target}")
+        for col in adj_contributions.columns:
+            line_chart.add(col, adj_contributions[col].values)
+        show(line_chart)'''
