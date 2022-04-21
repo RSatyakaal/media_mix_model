@@ -68,14 +68,15 @@ class BayesianMixModel:
         with pm.Model() as mmm:
             channel_contributions = []
             
-            data = pm.Data("data", self.X)
+#             data = pm.Data("data", self.X)
             
             for i, channel in enumerate(self.X.columns.values):
                 coef = pm.Exponential(f'coef_{channel}', lam=0.0001)
                 sat = pm.Exponential(f'sat_{channel}', lam=1)
                 car = pm.Beta(f'car_{channel}', alpha=2, beta=2)
 
-                channel_data = data.get_value()[:, i]
+#                 channel_data = data.get_value()[:, i]
+                channel_data = pm.Data(f"{channel}", self.X.iloc[:, i])
                 channel_contribution = pm.Deterministic(
                     f'contribution_{channel}',
                     coef * saturate(
@@ -108,9 +109,15 @@ class BayesianMixModel:
         """
             X: DataFrame
         """
-        pm.set_data({"data" : X}, model=self.mmm)
-        ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
-        p_test_pred = ppc_test["sales"].mean(axis=0)
+        print("I peed on deez nuts")
+
+        
+        
+        with self.mmm:
+            pm.set_data({channel: self.X.iloc[:, i] for i, channel in enumerate(self.X.columns.values)}, model=self.mmm)
+            print("I pissed in yo wallet, and then took a dump on yo grave")
+            ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
+            p_test_pred = ppc_test["sales"].mean(axis=0)
         
         return p_test_pred
     
