@@ -76,7 +76,8 @@ class BayesianMixModel:
                 car = pm.Beta(f'car_{channel}', alpha=2, beta=2)
 
 #                 channel_data = data.get_value()[:, i]
-                channel_data = pm.Data(f"{channel}", self.X.iloc[:, i])
+#                 print(channel)
+                channel_data = pm.Data(channel, self.X.iloc[:, i].values)
                 channel_contribution = pm.Deterministic(
                     f'contribution_{channel}',
                     coef * saturate(
@@ -87,15 +88,17 @@ class BayesianMixModel:
                         sat
                     )
                 )
+                # uncomment out the entire above line
 
                 channel_contributions.append(channel_contribution)
+                # change above line when done testing to .append(channel_contribution)
 
             base = pm.Exponential('base', lam=0.0001)
             noise = pm.Exponential('noise', lam=0.0001)
-
+            coef = pm.Normal("coef", mu=0, sigma=10)
             sales = pm.Normal(
                 'sales',
-                mu=sum(channel_contributions) + base,
+                mu = sum(channel_contributions) + base,
                 sigma=noise,
                 observed=y
             )
@@ -109,13 +112,8 @@ class BayesianMixModel:
         """
             X: DataFrame
         """
-        print("I peed on deez nuts")
-
-        
-        
         with self.mmm:
-            pm.set_data({channel: self.X.iloc[:, i] for i, channel in enumerate(self.X.columns.values)}, model=self.mmm)
-            print("I pissed in yo wallet, and then took a dump on yo grave")
+            pm.set_data({channel: self.X.iloc[:, i].values for i, channel in enumerate(self.X.columns.values)}, model=self.mmm)
             ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
             p_test_pred = ppc_test["sales"].mean(axis=0)
         
@@ -168,14 +166,18 @@ class BayesianMixModel:
                 attribution graph
         """
         def compute_mean(trace, channel):
+            
+#             print(f"contribution_{channel}", trace.posterior[f"contribution_{channel}"].values.shape)
+            
             return (trace
                     .posterior[f'contribution_{channel}']
                     .values
-                    .reshape(4000, 200)
+                    .reshape(4000, len(self.X))
                     .mean(0)
                    )
         target = self.target
         X = self.X
+        y = self.y
         trace = self.trace
         data = self.X
         
@@ -199,8 +201,8 @@ class BayesianMixModel:
           .plot.area(
               figsize=(16, 10),
               linewidth=1,
-              title='Predicted Sales and Breakdown',
-              ylabel='Sales',
+              title=f'Predicted {target} and Breakdown',
+              ylabel=target,
               xlabel='Date'
           )
          )
