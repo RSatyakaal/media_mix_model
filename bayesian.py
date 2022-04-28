@@ -113,7 +113,7 @@ class BayesianMixModel:
             X: DataFrame
         """
         with self.mmm:
-            pm.set_data({channel: self.X.iloc[:, i].values for i, channel in enumerate(self.X.columns.values)}, model=self.mmm)
+            pm.set_data({channel: X.iloc[:, i].values for i, channel in enumerate(X.columns.values)}, model=self.mmm)
             ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
             p_test_pred = ppc_test["sales"].mean(axis=0)
         
