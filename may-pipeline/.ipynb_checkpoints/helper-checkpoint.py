@@ -1,34 +1,4 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import sklearn
 
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import RidgeCV, Ridge, Lasso
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import explained_variance_score, mean_squared_error, r2_score 
-from sklearn.metrics import mean_absolute_percentage_error
-
-from datetime import datetime as dt
-from functools import reduce
-from yellowbrick.regressor import residuals_plot
-from transformations import transform_one_column, select_best_feature, feature_imp_random_forest
-
-import time
-import ipywidgets as widgets
-from ipywidgets import FileUpload
-import datetime
-
-from IPython.display import display
-import io
-import re
-from scipy.optimize import minimize, LinearConstraint
-
-import holidays
 
 import pandas as pd
 import numpy as np
@@ -63,8 +33,8 @@ from scipy.optimize import minimize, LinearConstraint
 
 import holidays
 
-import panel as pn
-pn.extension()
+# import panel as pn
+# pn.extension()
 
 
 def input_file(file_type, use_excel=False):
@@ -342,6 +312,23 @@ def read_data_from_data_dict(data_dict, country, target, combine_columns):
         fringe.add(col)
     dfMediaCombined[target] = df[target]
     return dfMediaCombined
+
+def split_data(data_dict, country, target, combine_columns=False):
+    """
+        merges a few steps
+            (1) reading data from data_dict
+            (2) initializing bayesianmixmodel
+            (3) running sklearn's train-test-split on the data
+    """
+    df = read_data_from_data_dict(data_dict, country, target, combine_columns=True)
+    df = df[["amazon_media_cost", "facebook_media_cost", "youtube_media_cost", f"{target}"]]
+    
+    initial_model = BayesianMixModel(country=country, target=target)
+    X = df.drop(columns=[target])
+    y = df[target]
+    xtrain, xval, ytrain, yval = train_test_split(X,y, test_size=0.1, shuffle=False)
+    
+    return xtrain, xval, ytrain, yval, X, y, initial_model, df
 
 
 ### TRANSFORMATIONS

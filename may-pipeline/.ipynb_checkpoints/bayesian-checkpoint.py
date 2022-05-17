@@ -22,7 +22,7 @@ def saturate(x, a):
     """
     return 1 - tt.exp(-a*x)
 
-def carryover(x, strength, length=21):
+def carryover(x, strength, length=10):
     """
         same function as specified in google whitepaper
         usually use poission random variable for length
@@ -54,7 +54,7 @@ class BayesianMixModel:
         self.target = target
         self.metric = metric
     
-    def fit(self, X, y):
+    def fit(self, X, y, tune=3000):
         """
             called immediately upon initialization of BayesianMixModel instance
             trains model
@@ -64,6 +64,12 @@ class BayesianMixModel:
         
         self.X = X
         self.y = y
+        # implementing the sklearn Estimator interface
+        self.feature_names_in_ = X.columns.values
+        self.n_features_in_ = len(self.feature_names_in_)
+        self.n_iter = None
+        
+        
         
         with pm.Model() as mmm:
             channel_contributions = []
@@ -103,7 +109,7 @@ class BayesianMixModel:
                 observed=y
             )
 
-            trace = pm.sample(return_inferencedata=True, tune=3000)
+            trace = pm.sample(return_inferencedata=True, tune=tune)
         
         self.mmm = mmm
         self.trace = trace
@@ -167,9 +173,7 @@ class BayesianMixModel:
                 attribution graph
         """
         def compute_mean(trace, channel):
-            
-#             print(f"contribution_{channel}", trace.posterior[f"contribution_{channel}"].values.shape)
-            
+                        
             return (trace
                     .posterior[f'contribution_{channel}']
                     .values
@@ -223,6 +227,9 @@ class BayesianMixModel:
 # helper methods
 
 def calculate_mape(model, xtrain, ytrain, xval, yval):
+    """
+        inputs are self-explanatory, simply predicts mean absolute percentage error on training set and validation set
+    """
     trainPred = model.predict(xtrain)
     valPred = model.predict(xval)
     val_mape = mape(yval, valPred)
@@ -263,7 +270,7 @@ def saturation_curve(saturation_columns, trace):
     """
     plt.style.use('ggplot')
     x = np.arange(0, 100, 1)
-    saturation_columns = X.columns.values
+    saturation_columns = self.X.columns.values
 
     fig, axs = plt.subplots(len(saturation_columns))
     for i in range(0, len(saturation_columns)):
