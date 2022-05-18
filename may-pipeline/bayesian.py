@@ -11,6 +11,7 @@ import pygal
 from IPython.display import SVG, display
 
 from sklearn.metrics import mean_absolute_percentage_error as mape
+from sklearn.metrics import r2_score as r2
 from sklearn.model_selection import train_test_split
 
 from helper import *
@@ -119,12 +120,15 @@ class BayesianMixModel:
         """
             X: DataFrame
         """
+        data = pd.concat([self.X.tail(10), X], axis=0)
+        
+        
         with self.mmm:
-            pm.set_data({channel: X.iloc[:, i].values for i, channel in enumerate(X.columns.values)}, model=self.mmm)
+            pm.set_data({channel: data.iloc[:, i].values for i, channel in enumerate(data.columns.values)}, model=self.mmm)
             ppc_test = pm.sample_posterior_predictive(self.trace, model=self.mmm, samples=1000)
             p_test_pred = ppc_test["sales"].mean(axis=0)
         
-        return p_test_pred
+        return p_test_pred[10:]
     
     def score(self, X, y):
         """
@@ -256,10 +260,15 @@ def calculate_mape(model, xtrain, ytrain, xval, yval):
     """
     trainPred = model.predict(xtrain)
     valPred = model.predict(xval)
+    
+    
     val_mape = mape(yval, valPred)
     train_mape = mape(ytrain, trainPred)
     
-    return train_mape, val_mape
+    val_r2 = r2(yval, valPred)
+    train_r2 = r2(ytrain, trainPred)
+    
+    return train_mape, val_mape, train_r2, val_r2
         
 def validation_scatterplot(model, X, y):
     """
