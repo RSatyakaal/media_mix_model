@@ -44,12 +44,13 @@ def show(chart):
     display(SVG(chart.render(disable_xml_declaration=True)))
 
 class BayesianMixModel:
-    def __init__(self, country, target, metric=mape):
+    def __init__(self, client, country, target, metric=mape):
         """
             data: DataFrame containing both X and y
             target: (str) column in data that is the response variable
             metric: TBD
         """
+        self.client = client
         self.country = country
         self.target = target
         self.metric = metric
@@ -200,7 +201,7 @@ class BayesianMixModel:
         attribution_table = pd.DataFrame({'Revenue Contributions': adj_contributions.sum(axis=0)[1:], 
                                           'Media Spending': data[channels].sum(axis=0)})
         attribution_table['Attribution'] = attribution_table['Revenue Contributions'] / attribution_table['Media Spending']
-        attribution_table.to_excel('Attribution Table.xlsx')
+        attribution_table.to_excel(f'{self.client}_attribution_table.xlsx')
 
         ax = (adj_contributions
           .plot.area(
@@ -223,6 +224,29 @@ class BayesianMixModel:
         for col in adj_contributions.columns:
             line_chart.add(col, adj_contributions[col].values)
         show(line_chart)'''
+        
+    def saturation_curve(self):
+        """
+            outputs len(saturation_columns) saturation curves
+        """
+        plt.style.use('ggplot')
+        x = np.arange(0, 100, 1)
+        saturation_columns = self.X.columns.values
+        trace = self.trace
+
+        fig, axs = plt.subplots(len(saturation_columns))
+        for i in range(0, len(saturation_columns)):
+            sat_values = trace.posterior[f"sat_{saturation_columns[i]}"].values.flatten()
+            q1 = np.percentile(sat_values, q=2.5)
+            q2 = np.percentile(sat_values, q=97.5)
+            a = sat_values.mean()
+
+            axs[i].plot(x,1 - np.exp(-a * x))
+            axs[i].fill_between(x, 1 - np.exp(-q1 * x), 1 - np.exp(-q2 * x), color='b', alpha=.1)
+            axs[i].set_title(f"Saturation Curve for {shorten_f_name(saturation_columns[i]).upper()}")
+        fig.suptitle(f"Saturation Curves");
+        for ax in axs.flat:
+            ax.set(xlabel=f"carryover ($)", ylabel = "saturation proportion")
         
 # helper methods
 
@@ -264,24 +288,170 @@ def validation_lineplot(model, X, y, target):
     line_chart.add("PREDICTION", means)
     show(line_chart)
     
-def saturation_curve(saturation_columns, trace):
-    """
-        outputs len(saturation_columns) saturation curves
-    """
-    plt.style.use('ggplot')
-    x = np.arange(0, 100, 1)
-    saturation_columns = self.X.columns.values
 
-    fig, axs = plt.subplots(len(saturation_columns))
-    for i in range(0, len(saturation_columns)):
-        sat_values = trace.posterior[f"sat_{saturation_columns[i]}"].values.flatten()
-        q1 = np.percentile(sat_values, q=2.5)
-        q2 = np.percentile(sat_values, q=97.5)
-        a = sat_values.mean()
+        
+        
+        
+# OPTIMIZATION HELPER METHODS
+def gen_samples(model):
+    """
+        returns a single sample of the posterior
+        for use in optimization
+    """
+    coef = []
+    sat = []
+    car = []
+    
+    sample_num = np.random.randint(low=0, high=999)
+    
+    for channel in model.feature_names_in_:
+        
+        posterior = model.trace.posterior
+        coef.append(posterior[f"coef_{channel}"].to_numpy().mean(axis=0).flatten()[sample_num])
+        sat.append(posterior[f"sat_{channel}"].to_numpy().mean(axis=0).flatten()[sample_num])
+        car.append(posterior[f"car_{channel}"].to_numpy().mean(axis=0).flatten()[sample_num])
+        
+    return np.array(coef), np.array(sat), np.array(car)
 
-        axs[i].plot(x,1 - np.exp(-a * x))
-        axs[i].fill_between(x, 1 - np.exp(-q1 * x), 1 - np.exp(-q2 * x), color='b', alpha=.1)
-        axs[i].set_title(f"Saturation Curve for {shorten_f_name(saturation_columns[i]).upper()}")
-    fig.suptitle(f"Saturation Curves");
-    for ax in axs.flat:
-        ax.set(xlabel=f"carryover ($)", ylabel = "saturation proportion")
+def get_means(model):
+    """
+        returns the means of the posterior
+        for use in mean optimization
+    """
+    coef = []
+    sat = []
+    car = []
+    
+    sample_num = np.random.randint(low=0, high=999)
+    
+    for channel in model.feature_names_in_:
+        
+        posterior = model.trace.posterior
+        coef.append(posterior[f"coef_{channel}"].to_numpy().mean())
+        sat.append(posterior[f"sat_{channel}"].to_numpy().mean())
+        car.append(posterior[f"car_{channel}"].to_numpy().mean())
+        
+    return np.array(coef), np.array(sat), np.array(car)
+
+def create_dataset_extra_rows(model):
+    """
+        returns a properly pre-processed dataset
+        attaches past 10 rows from training dataset
+        adds a dummy row at the bottom because last carryover doesn't matter
+    """
+    last_10_rows = model.X.tail(10)   
+    last_10_rows.loc[last_10_rows.index[-1] + datetime.timedelta(days=1)] = 0
+    return last_10_rows
+
+def calculate_carryover_vector(model, car, last_10_rows):
+    """
+        calculates carryover vector by iterating over each channel, and running carryover on each channel given the sampled car value
+    """
+    cv = []
+    post = model.trace.posterior
+    for idx, channel in enumerate(model.feature_names_in_):
+        column = last_10_rows[channel].values
+        param = car[idx]
+        value = carryover(column, param).eval().flatten()[-1]
+        cv.append(value)
+    
+    return np.array(cv)
+
+def objective_function(x, coef, sat, car, carryover_vector):
+    """
+        this is after values are sampled from the posterior
+        x is an array of raw spends
+        coef, sat, car, carryover should be vectors of length c where c = number of channels
+        carryover should contain the carryover from past (10) days
+        
+        all should be numpy arrays
+    """
+    c = len(coef)
+    # create matrix of coefficients for final step
+    weights = np.diag(coef)
+    
+    # assuming we pre-compute carryovers so we can exclude from objective fn
+    # note: there is no loss at day-0 of spends
+    spends = carryover_vector + x
+    
+    # applies saturation curve on carryover'd spend
+    sats = np.diag(sat)
+    temp = 1 - np.exp(-sats@spends)
+    # since our optimizer is a minimizer, we need to negate our predicted #orders
+    y = weights@temp
+    
+
+    return -1*np.sum(weights@temp)
+
+def optimize(model, n_iter=1000, budget=20000):
+    """
+        model: BayesianMixModel already trained
+        n_iter: (int) default=1000
+        budget: (int) default=20000
+    """
+    xs = []
+    c = model.n_features_in_
+    for i in range(n_iter):
+        
+        # (1) sample parameter values
+        coef, sat, car = gen_samples(model)
+#         print("PARAM:", coef, sat, car)
+        last_10_rows = create_dataset_extra_rows(model)
+        
+        # (2) calculate the carryover vector
+        cv = calculate_carryover_vector(model, car, last_10_rows)
+#         cv = np.zeros(c)
+        # (3) run the optimizer [same as before, just modified to work]
+        # note: change the constraints and bounds later
+        constraint = LinearConstraint(np.ones(c), lb=0, ub=budget)
+        res = minimize(objective_function, method="trust-constr", x0 = budget/c * np.random.random(c), args=(coef, sat, car, cv), constraints=constraint, bounds=[(0, 2*budget/c) for j in range(c)])
+        xs.append(res.x)
+    
+    return np.array(xs)
+
+def optimize_using_mean(model, budget):
+    xs = []
+    c = model.n_features_in_
+        
+    # (1) sample parameter values
+    coef, sat, car = get_means(model)
+#         print("PARAM:", coef, sat, car)
+    last_10_rows = create_dataset_extra_rows(model)
+
+    # (2) calculate the carryover vector
+    cv = calculate_carryover_vector(model, car, last_10_rows)
+    # (3) run the optimizer [same as before, just modified to work]
+    # note: change the constraints and bounds later
+    constraint = LinearConstraint(np.ones(c), lb=0, ub=budget)
+    res = minimize(objective_function, method="trust-constr", x0 = budget/c * np.random.random(c), args=(coef, sat, car, cv), constraints=constraint, bounds=[(0, 2*budget/c) for j in range(c)])
+    xs.append(res.x)
+    
+    return np.array(xs)
+
+
+def bayesian_optimize_month(model, budget, days=30):
+    """
+        optimizes for 30 days
+    """
+    last_10_rows = create_dataset_extra_rows(model)
+    xs = []
+    c = model.n_features_in_
+    for day in range(days):
+        # (1) sample parameter values
+        coef, sat, car = get_means(model)
+        # (2) calculate the carryover vector
+        cv = calculate_carryover_vector(model, car, last_10_rows)
+        # (3) run the optimizer [same as before, just modified to work]
+        # note: change the constraints and bounds later
+        constraint = LinearConstraint(np.ones(c), lb=0, ub=budget)
+        res = minimize(objective_function, method="trust-constr", x0 = budget/c * np.random.random(c), args=(coef, sat, car, cv), constraints=constraint, bounds=[(0, budget/2) for j in range(c)])
+        xs.append(res.x)
+        last_10_rows.loc[last_10_rows.index[-1] + datetime.timedelta(days=1)] = res.x    
+    
+    
+    # write optimized month results to file
+    df = pd.DataFrame(columns=initial_model.feature_names_in_, data=np.array(xs))
+    df.to_excel("optimized_month.xlsx", header=True, index=True)
+    
+    return np.array(xs)
+    
