@@ -4,7 +4,7 @@ import numpy as np
 import pymc3 as pm
 import arviz as az
 import theano.tensor as tt
-
+import cvxpy as cp
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pygal
@@ -45,7 +45,7 @@ def show(chart):
     display(SVG(chart.render(disable_xml_declaration=True)))
 
 class BayesianMixModel:
-    def __init__(self, client, country, target, metric=mape):
+    def __init__(self, client, country, target, path = ".", metric=mape):
         """
             data: DataFrame containing both X and y
             target: (str) column in data that is the response variable
@@ -54,7 +54,9 @@ class BayesianMixModel:
         self.client = client
         self.country = country
         self.target = target
+        self.path = path
         self.metric = metric
+        
     
     def fit(self, X, y, tune=3000):
         """
@@ -205,7 +207,7 @@ class BayesianMixModel:
         attribution_table = pd.DataFrame({'Revenue Contributions': adj_contributions.sum(axis=0)[1:], 
                                           'Media Spending': data[channels].sum(axis=0)})
         attribution_table['Attribution'] = attribution_table['Revenue Contributions'] / attribution_table['Media Spending']
-        attribution_table.to_excel(f'{self.client}_attribution_table.xlsx')
+        attribution_table.to_excel(f'{self.path}/{self.client}_attribution_table.xlsx')
 
         ax = (adj_contributions
           .plot.area(
@@ -342,6 +344,27 @@ def get_means(model):
         
     return np.array(coef), np.array(sat), np.array(car)
 
+def calculate_current_saturations(model):
+    """
+        looks at end of training data and outputs how saturated each channel is
+    """
+    X = model.X
+    last = X.tail(10)
+    last.loc[last.index[-1] + datetime.timedelta(days=1)] = 0
+    coef, sat, car = get_means(model)
+    
+    cv = []
+    post = model.trace.posterior
+    for idx, channel in enumerate(model.feature_names_in_):
+        column = last[channel].values
+        param = car[idx]
+        value = carryover(column, param).eval().flatten()[-1]
+        param = sat[idx]
+        value = saturate(value, param).eval()
+        
+        cv.append(value)
+    return np.array(cv)
+
 def create_dataset_extra_rows(model):
     """
         returns a properly pre-processed dataset
@@ -437,6 +460,63 @@ def optimize_using_mean(model, budget):
     
     return np.array(xs)
 
+def cvx_optimize_mean(model, budget):
+    xs = []
+    c = model.n_features_in_
+        
+    # (1) sample parameter values
+    coef, sat, car = get_means(model)
+#         print("PARAM:", coef, sat, car)
+    last_10_rows = create_dataset_extra_rows(model)
+
+    # (2) calculate the carryover vector
+    cv = calculate_carryover_vector(model, car, last_10_rows)
+    # (3) run the optimizer [same as before, just modified to work]
+    # note: change the constraints and bounds later
+    ones = np.ones(c)
+    x = cp.Variable(c)
+    spends = cv + x
+    sat_matrix = np.diag(sat)
+    obj = cp.Maximize(coef@ones - coef@cp.exp(-sat_matrix@cv - sat_matrix@x))
+    constraints = [0 <= x, x <= np.percentile(model.X, q=95, axis=0), np.ones(c)@x <= budget]
+    prob = cp.Problem(obj, constraints)
+    result = prob.solve(verbose=False)    
+    
+    return np.array(x.value)
+
+def cvx_optimize_month(model, budget, days=10):
+    """
+        optimizes for 30 days
+    """
+    last_10_rows = create_dataset_extra_rows(model)
+    xs = []
+    c = model.n_features_in_
+    for day in range(days):
+        # (1) sample parameter values
+        coef, sat, car = get_means(model)
+        # (2) calculate the carryover vector
+        cv = calculate_carryover_vector(model, car, last_10_rows)
+        # (3) run the optimizer [same as before, just modified to work]
+        # note: change the constraints and bounds later
+        ones = np.ones(c)
+        x = cp.Variable(c)
+        spends = cv + x
+        sat_matrix = np.diag(sat)
+        obj = cp.Maximize(coef@ones - coef@cp.exp(-sat_matrix@cv - sat_matrix@x))
+        constraints = [0 <= x, x <= np.percentile(xtrain, q=95, axis=0), np.ones(c)@x <= budget]
+        prob = cp.Problem(obj, constraints)
+        result = prob.solve(verbose=False)    
+        
+        xs.append(x.value)
+        last_10_rows.loc[last_10_rows.index[-1] + datetime.timedelta(days=1)] = x.value  
+    
+    
+    # write optimized month results to file
+    df = pd.DataFrame(columns=model.feature_names_in_, data=np.array(xs))
+    df.to_excel("optimized_month.xlsx", header=True, index=True)
+    
+    return np.array(xs)
+
 
 def bayesian_optimize_month(model, budget, days=30):
     """
@@ -459,8 +539,15 @@ def bayesian_optimize_month(model, budget, days=30):
     
     
     # write optimized month results to file
-    df = pd.DataFrame(columns=initial_model.feature_names_in_, data=np.array(xs))
-    df.to_excel("optimized_month.xlsx", header=True, index=True)
+    df = pd.DataFrame(columns=model.feature_names_in_, data=np.array(xs))
+    df.to_excel(f"{model.path}/{model.client.lower()}_optimized_month.xlsx", header=True, index=True)
     
     return np.array(xs)
+
+def channel_bar(model, y, title=""):
+    # helper method to shorten code; outputs bar plot of channels
+    sns.barplot(x=list(map(shorten_f_name, model.feature_names_in_)), y=y); 
+    plt.xticks(rotation = 45);
+    plt.title(title);
+
     
